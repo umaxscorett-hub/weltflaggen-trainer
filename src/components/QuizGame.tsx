@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Pause, Play, Home, Eye, EyeOff } from "lucide-react";
-import { countries, shuffleArray, checkAnswer, continentEmojis, type Country } from "@/data/countries";
+import { countries, shuffleArray, checkAnswer, continentEmojis, getFlagUrl, type Country } from "@/data/countries";
 import { useToast } from "@/hooks/use-toast";
 
 interface QuizGameProps {
@@ -89,7 +89,7 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
       setCorrectAnswers(prev => new Set(prev).add(currentIndex));
       toast({
         title: "Richtig! ✅",
-        description: `${currentCountry.flag} ${currentCountry.name}`,
+        description: `${currentCountry.name}`,
         className: "bg-success text-success-foreground",
       });
       
@@ -100,7 +100,7 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     } else {
       toast({
         title: "Leider falsch ❌",
-        description: `Das war ${currentCountry.flag} ${currentCountry.name}`,
+        description: `Das war ${currentCountry.name}`,
         variant: "destructive",
       });
     }
@@ -201,8 +201,13 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
           <Card className="text-center">
             <CardContent className="py-12">
               {/* Flag Display */}
-              <div className="text-9xl mb-8 select-none">
-                {currentCountry?.flag}
+              <div className="mb-8 flex justify-center">
+                <img 
+                  src={getFlagUrl(currentCountry?.code || '')} 
+                  alt={`Flagge von ${currentCountry?.name}`}
+                  className="w-48 h-32 object-cover rounded-lg shadow-lg border-2 border-border"
+                  loading="lazy"
+                />
               </div>
 
               {/* Answer Display */}
