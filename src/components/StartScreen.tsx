@@ -33,10 +33,7 @@ export default function StartScreen({ onSelectMode }: StartScreenProps) {
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <ul className="text-sm text-muted-foreground space-y-2">
-                <li>• Zeit wird gestoppt</li>
-                <li>• Alle Kontinente gemischt</li>
-                <li>• Fortschritt: x/196</li>
-                <li>• Keine Hilfe verfügbar</li>
+              
               </ul>
               <Button size="lg" className="w-full">
                 Quiz starten
@@ -57,10 +54,7 @@ export default function StartScreen({ onSelectMode }: StartScreenProps) {
             </CardHeader>
             <CardContent className="text-center space-y-4">
               <ul className="text-sm text-muted-foreground space-y-2">
-                <li>• Nach Kontinent sortiert</li>
-                <li>• "Aufdecken" möglich</li>
-                <li>• Keine Zeitbegrenzung</li>
-                <li>• Entspanntes Lernen</li>
+           
               </ul>
               <Button variant="secondary" size="lg" className="w-full">
                 Lernen starten
@@ -71,7 +65,7 @@ export default function StartScreen({ onSelectMode }: StartScreenProps) {
 
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
-            Erkenne die Flaggen von Afrika, Asien, Europa, Nord- und Südamerika sowie Ozeanien
+            Erkenne die Flaggen von Afrika, Asien, Europa, Nord- und Südamerika sowie Ozeanien. Made by ijuriqu
           </p>
         </div>
       </div>
