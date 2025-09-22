@@ -1,13 +1,31 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import StartScreen from '@/components/StartScreen';
+import QuizGame from '@/components/QuizGame';
+
+type GameMode = 'timed' | 'learn' | null;
 
 const Index = () => {
+  const [gameMode, setGameMode] = useState<GameMode>(null);
+
+  const handleSelectMode = (mode: GameMode) => {
+    setGameMode(mode);
+  };
+
+  const handleBackToStart = () => {
+    setGameMode(null);
+  };
+
+  if (gameMode) {
+    return (
+      <QuizGame 
+        mode={gameMode} 
+        onBackToStart={handleBackToStart}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
-    </div>
+    <StartScreen onSelectMode={handleSelectMode} />
   );
 };
 
