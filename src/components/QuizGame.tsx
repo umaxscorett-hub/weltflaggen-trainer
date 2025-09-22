@@ -77,33 +77,35 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     }
   }, [currentIndex, gameCountries, currentContinent, mode, toast]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setUserInput(value);
+    
+    // Check answer in real-time for auto-advance
+    if (value.trim() && currentIndex < gameCountries.length) {
+      const currentCountry = gameCountries[currentIndex];
+      const isCorrect = checkAnswer(value, currentCountry);
+
+      if (isCorrect) {
+        setScore(prev => prev + 1);
+        setCorrectAnswers(prev => new Set(prev).add(currentIndex));
+        toast({
+          title: "Richtig! ✅",
+          description: `${currentCountry.name}`,
+          className: "bg-success text-success-foreground",
+        });
+        
+        // Auto-advance to next question
+        setTimeout(() => {
+          nextQuestion();
+        }, 800);
+      }
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userInput.trim() || currentIndex >= gameCountries.length) return;
-
-    const currentCountry = gameCountries[currentIndex];
-    const isCorrect = checkAnswer(userInput, currentCountry);
-
-    if (isCorrect) {
-      setScore(prev => prev + 1);
-      setCorrectAnswers(prev => new Set(prev).add(currentIndex));
-      toast({
-        title: "Richtig! ✅",
-        description: `${currentCountry.name}`,
-        className: "bg-success text-success-foreground",
-      });
-      
-      // Auto-advance to next question
-      setTimeout(() => {
-        nextQuestion();
-      }, 1000);
-    } else {
-      toast({
-        title: "Leider falsch ❌",
-        description: `Das war ${currentCountry.name}`,
-        variant: "destructive",
-      });
-    }
+    // This is now only used for manual submission if needed
   };
 
   const nextQuestion = () => {
@@ -225,7 +227,7 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                   ref={inputRef}
                   type="text"
                   value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
+                  onChange={handleInputChange}
                   placeholder="Ländername eingeben..."
                   className="text-lg text-center"
                   disabled={isRevealed}
@@ -233,12 +235,6 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                 />
                 
                 <div className="flex gap-2 justify-center">
-                  {!isRevealed && (
-                    <Button type="submit" size="lg" disabled={!userInput.trim()}>
-                      Bestätigen
-                    </Button>
-                  )}
-                  
                   {mode === 'learn' && (
                     <>
                       {!isRevealed ? (
