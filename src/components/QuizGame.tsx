@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Pause, Play, Home, Eye, EyeOff } from "lucide-react";
+import { Pause, Play, Home, Eye, EyeOff, SkipForward } from "lucide-react";
 import { countries, shuffleArray, checkAnswer, continentEmojis, getFlagUrl, type Country } from "@/data/countries";
 import { useToast } from "@/hooks/use-toast";
 
@@ -23,6 +23,7 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [isRevealed, setIsRevealed] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState<Set<number>>(new Set());
+  const [skippedQuestions, setSkippedQuestions] = useState<Country[]>([]);
   const [currentContinent, setCurrentContinent] = useState("");
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -95,10 +96,10 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
           className: "bg-success text-success-foreground",
         });
         
-        // Auto-advance to next question
+        // Auto-advance to next question (much faster)
         setTimeout(() => {
           nextQuestion();
-        }, 800);
+        }, 150);
       }
     }
   };
@@ -110,6 +111,17 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
 
   const nextQuestion = () => {
     if (currentIndex + 1 >= gameCountries.length) {
+      // Check if there are skipped questions to add back
+      if (skippedQuestions.length > 0) {
+        setGameCountries(prev => [...prev, ...skippedQuestions]);
+        setSkippedQuestions([]);
+        setCurrentIndex(prev => prev + 1);
+        setUserInput("");
+        setIsRevealed(false);
+        inputRef.current?.focus();
+        return;
+      }
+      
       // Game finished
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -130,6 +142,21 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     setUserInput("");
     setIsRevealed(false);
     inputRef.current?.focus();
+  };
+
+  const skipQuestion = () => {
+    if (mode === 'timed' && currentIndex < gameCountries.length) {
+      const currentCountry = gameCountries[currentIndex];
+      setSkippedQuestions(prev => [...prev, currentCountry]);
+      
+      toast({
+        title: "Übersprungen ⏭️",
+        description: "Flagge wird am Ende nochmal gezeigt",
+        className: "bg-muted text-muted-foreground",
+      });
+      
+      nextQuestion();
+    }
   };
 
   const revealAnswer = () => {
@@ -235,6 +262,18 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                 />
                 
                 <div className="flex gap-2 justify-center">
+                  {mode === 'timed' && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="lg"
+                      onClick={skipQuestion}
+                    >
+                      <SkipForward className="w-4 h-4 mr-2" />
+                      Überspringen
+                    </Button>
+                  )}
+                  
                   {mode === 'learn' && (
                     <>
                       {!isRevealed ? (
@@ -264,7 +303,14 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
               {/* Stats */}
               <div className="mt-8 flex justify-center gap-6 text-sm text-muted-foreground">
                 <span>✅ Richtige: {correctAnswers.size}</span>
-                <span>❌ Falsche: {currentIndex - correctAnswers.size}</span>
+                {mode === 'timed' ? (
+                  <>
+                    <span>⏭️ Übersprungen: {skippedQuestions.length}</span>
+                    <span>❌ Falsche: {currentIndex - correctAnswers.size - skippedQuestions.length}</span>
+                  </>
+                ) : (
+                  <span>❌ Falsche: {currentIndex - correctAnswers.size}</span>
+                )}
               </div>
             </CardContent>
           </Card>
