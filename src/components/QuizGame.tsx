@@ -9,11 +9,13 @@ import { countries, shuffleArray, checkAnswer, continentEmojis, getFlagUrl, type
 import { useToast } from "@/hooks/use-toast";
 
 interface QuizGameProps {
-  mode: 'timed' | 'learn';
+  mode: 'timed' | 'learn' | 'streak' | 'continent' | 'speedrush';
   onBackToStart: () => void;
+  continent?: string;
+  timeLimit?: number;
 }
 
-export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
+export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: QuizGameProps) {
   const [gameCountries, setGameCountries] = useState<Country[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userInput, setUserInput] = useState("");
@@ -25,6 +27,9 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
   const [correctAnswers, setCorrectAnswers] = useState<Set<number>>(new Set());
   const [skippedQuestions, setSkippedQuestions] = useState<Country[]>([]);
   const [currentContinent, setCurrentContinent] = useState("");
+  const [streak, setStreak] = useState(0);
+  const [gameOver, setGameOver] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(timeLimit || 0);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const intervalRef = useRef<NodeJS.Timeout>();
@@ -33,8 +38,18 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
   useEffect(() => {
     // Initialize game
     let shuffledCountries;
-    if (mode === 'timed') {
+    
+    if (mode === 'continent' && continent) {
+      // Filter by selected continent
+      shuffledCountries = countries.filter(country => country.continent === continent);
+      shuffledCountries = shuffleArray(shuffledCountries);
+    } else if (mode === 'timed') {
       shuffledCountries = shuffleArray(countries);
+    } else if (mode === 'streak') {
+      shuffledCountries = shuffleArray(countries);
+    } else if (mode === 'speedrush') {
+      shuffledCountries = shuffleArray(countries);
+      setTimeRemaining(timeLimit || 300);
     } else {
       // Group by continent for learning mode
       const continents = ['Afrika', 'Asien', 'Europa', 'Nordamerika', 'Südamerika', 'Ozeanien'];
@@ -47,11 +62,28 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     setStartTime(new Date());
     setCurrentContinent(shuffledCountries[0]?.continent || "");
     
-    // Start timer for timed mode
+    // Start timer for timed mode or speed rush
     if (mode === 'timed') {
       intervalRef.current = setInterval(() => {
         if (!isPaused) {
           setElapsedTime(prev => prev + 1);
+        }
+      }, 1000);
+    } else if (mode === 'speedrush') {
+      intervalRef.current = setInterval(() => {
+        if (!isPaused && !gameOver) {
+          setTimeRemaining(prev => {
+            if (prev <= 1) {
+              // Game over - time's up
+              setGameOver(true);
+              toast({
+                title: "⏰ Zeit abgelaufen!",
+                description: `Du hast ${score} Flaggen richtig erkannt!`,
+              });
+              return 0;
+            }
+            return prev - 1;
+          });
         }
       }, 1000);
     }
@@ -61,7 +93,7 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
         clearInterval(intervalRef.current);
       }
     };
-  }, [mode, isPaused]);
+  }, [mode, isPaused, continent, timeLimit, gameOver, score, toast]);
 
   useEffect(() => {
     if (gameCountries.length > 0 && currentIndex < gameCountries.length) {
@@ -82,6 +114,9 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     const value = e.target.value;
     setUserInput(value);
     
+    // Don't process if game is over
+    if (gameOver) return;
+    
     // Check answer in real-time for auto-advance
     if (value.trim() && currentIndex < gameCountries.length) {
       const currentCountry = gameCountries[currentIndex];
@@ -90,9 +125,14 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
       if (isCorrect) {
         setScore(prev => prev + 1);
         setCorrectAnswers(prev => new Set(prev).add(currentIndex));
+        
+        if (mode === 'streak') {
+          setStreak(prev => prev + 1);
+        }
+        
         toast({
           title: "Richtig! ✅",
-          description: `${currentCountry.name}`,
+          description: `${currentCountry.name}${mode === 'streak' ? ` - Streak: ${streak + 1}` : ''}`,
           className: "bg-success text-success-foreground",
         });
         
@@ -106,10 +146,30 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // This is now only used for manual submission if needed
+    
+    // For streak mode, check if answer is wrong and end game
+    if (mode === 'streak' && userInput.trim()) {
+      const currentCountry = gameCountries[currentIndex];
+      const isCorrect = checkAnswer(userInput, currentCountry);
+      
+      if (!isCorrect) {
+        setGameOver(true);
+        toast({
+          title: "💔 Streak beendet!",
+          description: `Du hast ${streak} Flaggen in Folge richtig erkannt! Die richtige Antwort war: ${currentCountry.name}`,
+          className: "bg-destructive text-destructive-foreground",
+        });
+        return;
+      }
+    }
   };
 
   const nextQuestion = () => {
+    // For speedrush mode, don't advance if time is up
+    if (mode === 'speedrush' && timeRemaining <= 0) {
+      return;
+    }
+    
     if (currentIndex + 1 >= gameCountries.length) {
       // Check if there are skipped questions to add back
       if (skippedQuestions.length > 0) {
@@ -127,12 +187,27 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
         clearInterval(intervalRef.current);
       }
       
-      const finalTime = mode === 'timed' ? elapsedTime : 0;
-      const finalScore = correctAnswers.size + (checkAnswer(userInput, gameCountries[currentIndex]) ? 1 : 0);
+      setGameOver(true);
+      
+      let finalMessage = "";
+      if (mode === 'timed') {
+        const finalScore = correctAnswers.size + (checkAnswer(userInput, gameCountries[currentIndex]) ? 1 : 0);
+        finalMessage = `${finalScore}/196 Flaggen erkannt in ${formatTime(elapsedTime)}`;
+      } else if (mode === 'streak') {
+        finalMessage = `Streak von ${streak} Flaggen!`;
+      } else if (mode === 'continent') {
+        const finalScore = correctAnswers.size + (checkAnswer(userInput, gameCountries[currentIndex]) ? 1 : 0);
+        finalMessage = `${finalScore}/${gameCountries.length} Flaggen von ${continent} erkannt!`;
+      } else if (mode === 'speedrush') {
+        finalMessage = `${score} Flaggen in ${formatTime((timeLimit || 0) - timeRemaining)} richtig erkannt!`;
+      } else {
+        const finalScore = correctAnswers.size + (checkAnswer(userInput, gameCountries[currentIndex]) ? 1 : 0);
+        finalMessage = `${finalScore}/196 Flaggen erkannt`;
+      }
       
       toast({
         title: "🎉 Quiz beendet!",
-        description: `${finalScore}/196 Flaggen erkannt${mode === 'timed' ? ` in ${formatTime(finalTime)}` : ''}`,
+        description: finalMessage,
       });
       
       return;
@@ -175,8 +250,60 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getModeTitle = () => {
+    switch (mode) {
+      case 'timed': return 'Zeitmessung';
+      case 'learn': return 'Lernmodus';
+      case 'streak': return 'Streak-Modus';
+      case 'continent': return `Kontinent: ${continent}`;
+      case 'speedrush': return 'Speed-Rush';
+      default: return 'Quiz';
+    }
+  };
+
   if (gameCountries.length === 0) {
     return <div className="flex items-center justify-center min-h-screen">Lade Quiz...</div>;
+  }
+
+  // Game over screen for streak mode or speedrush when time is up
+  if (gameOver || (mode === 'speedrush' && timeRemaining <= 0)) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/5 to-secondary/5 flex items-center justify-center p-4">
+        <Card className="max-w-md w-full text-center">
+          <CardContent className="py-12">
+            <div className="text-6xl mb-4">
+              {mode === 'streak' ? '💔' : mode === 'speedrush' ? '⏰' : '🎉'}
+            </div>
+            <h2 className="text-2xl font-bold mb-4">
+              {mode === 'streak' ? 'Streak beendet!' : mode === 'speedrush' ? 'Zeit abgelaufen!' : 'Quiz beendet!'}
+            </h2>
+            
+            <div className="space-y-3 mb-6">
+              {mode === 'streak' && (
+                <p className="text-lg">
+                  <span className="font-bold text-2xl text-primary">{streak}</span> Flaggen in Folge richtig!
+                </p>
+              )}
+              {mode === 'speedrush' && (
+                <p className="text-lg">
+                  <span className="font-bold text-2xl text-primary">{score}</span> Flaggen richtig erkannt!
+                </p>
+              )}
+              {(mode === 'continent' || mode === 'timed' || mode === 'learn') && (
+                <p className="text-lg">
+                  <span className="font-bold text-2xl text-primary">{score}</span>/
+                  {mode === 'continent' ? gameCountries.length : '196'} Flaggen richtig!
+                </p>
+              )}
+            </div>
+            
+            <Button onClick={onBackToStart} size="lg" className="w-full">
+              Neues Quiz starten
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const currentCountry = gameCountries[currentIndex];
@@ -203,8 +330,18 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                 ⏱️ {formatTime(elapsedTime)}
               </Badge>
             )}
+            {mode === 'speedrush' && (
+              <Badge variant="outline" className="text-lg px-3 py-1">
+                ⏰ {formatTime(timeRemaining)}
+              </Badge>
+            )}
+            {mode === 'streak' && (
+              <Badge variant="outline" className="text-lg px-3 py-1">
+                🔥 Streak: {streak}
+              </Badge>
+            )}
             <Badge variant="outline" className="text-lg px-3 py-1">
-              {currentIndex + 1}/196
+              {currentIndex + 1}/{gameCountries.length}
             </Badge>
           </div>
         </div>
@@ -297,6 +434,45 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                       )}
                     </>
                   )}
+                  
+                  {mode === 'streak' && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="lg"
+                      onClick={() => {
+                        setGameOver(true);
+                        toast({
+                          title: "Aufgegeben",
+                          description: `Dein Streak: ${streak} Flaggen`,
+                        });
+                      }}
+                    >
+                      Aufgeben
+                    </Button>
+                  )}
+                  
+                  {(mode === 'continent' || mode === 'speedrush') && !isRevealed && (
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="lg"
+                      onClick={revealAnswer}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Aufdecken
+                    </Button>
+                  )}
+                  
+                  {(mode === 'continent' || mode === 'speedrush') && isRevealed && (
+                    <Button 
+                      type="button" 
+                      size="lg"
+                      onClick={nextQuestion}
+                    >
+                      Weiter
+                    </Button>
+                  )}
                 </div>
               </form>
 
@@ -308,6 +484,10 @@ export default function QuizGame({ mode, onBackToStart }: QuizGameProps) {
                     <span>⏭️ Übersprungen: {skippedQuestions.length}</span>
                     <span>❌ Falsche: {currentIndex - correctAnswers.size - skippedQuestions.length}</span>
                   </>
+                ) : mode === 'streak' ? (
+                  <span>🔥 Aktueller Streak: {streak}</span>
+                ) : mode === 'speedrush' ? (
+                  <span>⏰ Verbleibend: {formatTime(timeRemaining)}</span>
                 ) : (
                   <span>❌ Falsche: {currentIndex - correctAnswers.size}</span>
                 )}
