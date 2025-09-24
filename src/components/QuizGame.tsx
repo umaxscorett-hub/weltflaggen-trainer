@@ -9,7 +9,7 @@ import { countries, shuffleArray, checkAnswer, continentEmojis, getFlagUrl, type
 import { useToast } from "@/hooks/use-toast";
 
 interface QuizGameProps {
-  mode: 'timed' | 'learn' | 'streak' | 'continent' | 'speedrush';
+  mode: 'timed' | 'learn' | 'streak' | 'continent' | 'speedrush' | 'capital-to-country' | 'country-to-capital' | 'outline';
   onBackToStart: () => void;
   continent?: string;
   timeLimit?: number;
@@ -50,6 +50,8 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
     } else if (mode === 'speedrush') {
       shuffledCountries = shuffleArray(countries);
       setTimeRemaining(timeLimit || 300);
+    } else if (mode === 'capital-to-country' || mode === 'country-to-capital' || mode === 'outline') {
+      shuffledCountries = shuffleArray(countries);
     } else {
       // Group by continent for learning mode
       const continents = ['Afrika', 'Asien', 'Europa', 'Nordamerika', 'Südamerika', 'Ozeanien'];
@@ -120,7 +122,17 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
     // Check answer in real-time for auto-advance
     if (value.trim() && currentIndex < gameCountries.length) {
       const currentCountry = gameCountries[currentIndex];
-      const isCorrect = checkAnswer(value, currentCountry);
+      let isCorrect = false;
+      
+      if (mode === 'capital-to-country') {
+        isCorrect = checkAnswer(value, currentCountry);
+      } else if (mode === 'country-to-capital') {
+        const normalizedInput = value.toLowerCase().trim();
+        const normalizedCapital = currentCountry.capital.toLowerCase().trim();
+        isCorrect = normalizedInput === normalizedCapital;
+      } else {
+        isCorrect = checkAnswer(value, currentCountry);
+      }
 
       if (isCorrect) {
         setScore(prev => prev + 1);
@@ -130,9 +142,18 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
           setStreak(prev => prev + 1);
         }
         
+        let correctAnswer = '';
+        if (mode === 'capital-to-country') {
+          correctAnswer = currentCountry.name;
+        } else if (mode === 'country-to-capital') {
+          correctAnswer = currentCountry.capital;
+        } else {
+          correctAnswer = currentCountry.name;
+        }
+        
         toast({
           title: "Richtig! ✅",
-          description: `${currentCountry.name}${mode === 'streak' ? ` - Streak: ${streak + 1}` : ''}`,
+          description: `${correctAnswer}${mode === 'streak' ? ` - Streak: ${streak + 1}` : ''}`,
           className: "bg-success text-success-foreground",
         });
         
@@ -257,6 +278,9 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
       case 'streak': return 'Streak-Modus';
       case 'continent': return `Kontinent: ${continent}`;
       case 'speedrush': return 'Speed-Rush';
+      case 'capital-to-country': return 'Hauptstadt → Land';
+      case 'country-to-capital': return 'Land → Hauptstadt';
+      case 'outline': return 'Länder-Umriss';
       default: return 'Quiz';
     }
   };
@@ -366,21 +390,43 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
         ) : (
           <Card className="text-center">
             <CardContent className="py-12">
-              {/* Flag Display */}
+              {/* Flag/Question Display */}
               <div className="mb-8 flex justify-center">
-                <img 
-                  src={getFlagUrl(currentCountry?.code || '')} 
-                  alt={`Flagge von ${currentCountry?.name}`}
-                  className="w-48 h-32 object-cover rounded-lg shadow-lg border-2 border-border"
-                  loading="lazy"
-                />
+                {mode === 'outline' ? (
+                  <div className="w-48 h-32 bg-muted rounded-lg shadow-lg border-2 border-border flex items-center justify-center">
+                    <div className="text-center">
+                      <Map className="h-12 w-12 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Länder-Silhouette</p>
+                      <p className="text-xs text-muted-foreground">(Feature in Entwicklung)</p>
+                    </div>
+                  </div>
+                ) : mode === 'capital-to-country' || mode === 'country-to-capital' ? (
+                  <div className="w-full max-w-md bg-gradient-to-br from-primary/10 to-secondary/10 rounded-lg shadow-lg border-2 border-border p-8">
+                    <div className="text-center">
+                      <MapPin className="h-16 w-16 mx-auto mb-4 text-primary" />
+                      <h2 className="text-4xl font-bold mb-4">
+                        {mode === 'capital-to-country' ? currentCountry?.capital : currentCountry?.name}
+                      </h2>
+                      <p className="text-muted-foreground text-lg">
+                        {mode === 'capital-to-country' ? 'Welches Land hat diese Hauptstadt?' : 'Wie heißt die Hauptstadt?'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <img 
+                    src={getFlagUrl(currentCountry?.code || '')} 
+                    alt={`Flagge von ${currentCountry?.name}`}
+                    className="w-48 h-32 object-cover rounded-lg shadow-lg border-2 border-border"
+                    loading="lazy"
+                  />
+                )}
               </div>
 
               {/* Answer Display */}
               {isRevealed && (
                 <div className="mb-6">
                   <Badge variant="secondary" className="text-lg px-4 py-2">
-                    {currentCountry?.name}
+                    {mode === 'country-to-capital' ? currentCountry?.capital : currentCountry?.name}
                   </Badge>
                 </div>
               )}
@@ -392,7 +438,12 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
                   type="text"
                   value={userInput}
                   onChange={handleInputChange}
-                  placeholder="Ländername eingeben..."
+                  placeholder={
+                    mode === 'capital-to-country' ? 'Ländername eingeben...' :
+                    mode === 'country-to-capital' ? 'Hauptstadt eingeben...' :
+                    mode === 'outline' ? 'Ländername eingeben...' :
+                    'Ländername eingeben...'
+                  }
                   className="text-lg text-center"
                   disabled={isRevealed}
                   autoFocus
@@ -452,7 +503,7 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
                     </Button>
                   )}
                   
-                  {(mode === 'continent' || mode === 'speedrush') && !isRevealed && (
+                  {(mode === 'continent' || mode === 'speedrush' || mode === 'capital-to-country' || mode === 'country-to-capital' || mode === 'outline') && !isRevealed && (
                     <Button 
                       type="button" 
                       variant="outline" 
@@ -464,7 +515,7 @@ export default function QuizGame({ mode, onBackToStart, continent, timeLimit }: 
                     </Button>
                   )}
                   
-                  {(mode === 'continent' || mode === 'speedrush') && isRevealed && (
+                  {(mode === 'continent' || mode === 'speedrush' || mode === 'capital-to-country' || mode === 'country-to-capital' || mode === 'outline') && isRevealed && (
                     <Button 
                       type="button" 
                       size="lg"
